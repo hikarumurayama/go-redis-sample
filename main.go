@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/redis/go-redis/v9"
+	"time"
 )
 
 type Data struct {
@@ -23,23 +24,37 @@ func main() {
 		value: "value1",
 	}
 
+	dd := Data{
+		key:   "key1",
+		value: "value100",
+	}
+
 	var ctx = context.Background()
 
-	// 登録
-	if err := c.Set(ctx, d.key, d.value, 0).Err(); err != nil {
-		panic(err)
+	go func() {
+		if err := Set(c, d, ctx); err != nil {
+			fmt.Printf("key:%s value:%s %v\n", d.key, d.value, err)
+		}
+	}()
+
+	go func() {
+		if err := Set(c, dd, ctx); err != nil {
+			fmt.Printf("key:%s value:%s %v\n", dd.key, dd.value, err)
+		}
+	}()
+
+	time.Sleep(3 * time.Second)
+}
+
+func Set(c *redis.Client, d Data, ctx context.Context) error {
+	// 値が存在していないときのみ値をセットする
+	ok, err := c.SetNX(ctx, d.key, d.value, 20*time.Second).Result()
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("failed to set")
 	}
 
-	// 取得
-	val, err := c.Get(ctx, d.key).Result()
-	switch {
-	case err == redis.Nil:
-		panic("key does not exist")
-	case err != nil:
-		panic(err)
-	case val == "":
-		panic("value is empty")
-	}
-
-	fmt.Println(d.key, val)
+	return nil
 }
